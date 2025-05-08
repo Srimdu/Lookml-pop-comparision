@@ -1,0 +1,104 @@
+connection: "bigquery_public_data_looker"
+
+# include all the views
+include: "/views/*.view"
+include: "/z_tests/*.lkml"
+include: "/**/*.dashboard"
+fiscal_month_offset: 6
+
+datagroup: training_ecommerce_default_datagroup {
+  # sql_trigger: SELECT MAX(id) FROM etl_log;;
+  max_cache_age: "24 hour"
+}
+
+persist_with: training_ecommerce_default_datagroup
+
+label: "E-Commerce Training"
+
+explore: order_items {
+  join: users {
+    type: left_outer
+    sql_on: ${order_items.user_id} = ${users.id} ;;
+    relationship: many_to_one
+  }
+
+  join: inventory_items {
+    type: left_outer
+    sql_on: ${order_items.inventory_item_id} = ${inventory_items.id} ;;
+    relationship: many_to_one
+  }
+
+  join: products {
+    type: left_outer
+    sql_on: ${inventory_items.product_id} = ${products.id} ;;
+    relationship: many_to_one
+  }
+
+  join: distribution_centers {
+    type: left_outer
+    sql_on: ${products.distribution_center_id} = ${distribution_centers.id} ;;
+    relationship: many_to_one
+  }
+}
+
+explore: events {
+  join: event_session_facts {
+    type: left_outer
+    sql_on: ${events.session_id} = ${event_session_facts.session_id} ;;
+    relationship: many_to_one
+  }
+  join: event_session_funnel {
+    type: left_outer
+    sql_on: ${events.session_id} = ${event_session_funnel.session_id} ;;
+    relationship: many_to_one
+  }
+  join: users {
+    type: left_outer
+    sql_on: ${events.user_id} = ${users.id} ;;
+    relationship: many_to_one
+  }
+}
+
+
+explore: order_pop {
+	join: order_pop_last_year {
+	type: left_outer
+	sql_on: ${order_pop.created_date} = ${order_pop_last_year.order_date_py_ref_ly} ;;
+	relationship: many_to_many
+  }
+}
+
+
+
+
+## order_pop_last_year.view.lkml
+
+
+view: order_pop_last_year {
+  derived_table: {
+    sql:
+      SELECT
+        DATE(created_at) order_date_ly,
+        DATE_ADD(DATE(created_at), INTERVAL 1 YEAR) AS order_date_py_ref_ly,
+        SUM(sale_price) AS last_year_revenue
+      FROM `cloud-training-demos.looker_ecomm.order_items`
+      GROUP BY 1,2
+    ;;
+  }
+
+  dimension: order_date_ly {
+    type: date
+    sql: ${TABLE}.order_date_ly ;;
+  }
+
+  dimension: order_date_py_ref_ly {
+    type:  date
+    sql: ${TABLE}.order_date_py_ref_ly ;;
+  }
+
+  measure: last_year_revenue {
+    type: sum
+    sql: ${TABLE}.last_year_revenue ;;
+    value_format_name: usd
+  }
+}
