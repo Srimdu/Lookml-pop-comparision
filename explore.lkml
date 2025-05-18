@@ -60,10 +60,23 @@ explore: events {
 }
 
 
+# explore: order_pop {
+#   join: order_pop_last_year {
+#     type: left_outer
+#     sql_on: ${order_pop.created_date} = ${order_pop_last_year.order_date_py_ref_ly} ;;
+#     relationship: many_to_many
+#   }
+# }
+
 explore: order_pop {
-	join: order_pop_last_year {
-	type: left_outer
-	sql_on: ${order_pop.created_date} = ${order_pop_last_year.order_date_py_ref_ly} ;;
-	relationship: many_to_many
+  join: date_dimension {
+    type: left_outer
+    sql_on: ${order_pop.created_date} = ${date_dimension.date} ;;
+    relationship: many_to_one
+  }
+  join: order_pop_last_year {
+    from: order_pop
+    sql_on: ${order_pop.created_date} = ${order_pop_last_year.created_date} + INTERVAL 1 YEAR ;;
+    relationship: one_to_one
   }
 }
