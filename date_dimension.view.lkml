@@ -1,48 +1,37 @@
-##date_dimension.view.lkml
-
+## date_dimension.view.lkml
 
 view: date_dimension {
   derived_table: {
     sql: SELECT
-          FORMAT_DATE('%Y%m%d', d) AS date_id,
           FORMAT_DATE('%Y-%m-%d', d) AS date,
-          DATE_SUB(d, INTERVAL 1 YEAR) AS last_year_date,
-          EXTRACT(DAY FROM d) AS day_of_month,
-          FORMAT_DATE('%A', d) AS day_name,
-          EXTRACT(DAYOFWEEK FROM d) AS day_of_week,
-          CASE
-            WHEN EXTRACT(DAYOFWEEK FROM d) IN (1, 7) THEN 'Weekend'
-            ELSE 'Weekday'
-          END AS weekend_flag,
-          EXTRACT(WEEK FROM d) AS week,
-          FORMAT_DATE('%Y-W%U', d) AS year_week,
-          EXTRACT(MONTH FROM d) AS month,
-          FORMAT_DATE('%B', d) AS month_name,
-          FORMAT_DATE('%Y-%m', d) AS year_month,
-          FORMAT_DATE('%Y-%b', d) AS year_month_name,
-          EXTRACT(QUARTER FROM d) AS qtr,
-          FORMAT_DATE('%Y-Q%Q', d) AS year_qtr,
+          FORMAT_DATE('%Y-W%U', d) AS week, -- e.g. 2024-W23
+          FORMAT_DATE('%Y-%b', d) AS month, -- e.g. 2024-Jun
+          FORMAT_DATE('%Y-Q%Q', d) AS quarter, -- e.g. 2024-Q2
+          CONCAT(EXTRACT(YEAR FROM d), '-H', CAST(CEIL(EXTRACT(MONTH FROM d)/6) AS STRING)) AS half_year, -- e.g. 2024-H1
           EXTRACT(YEAR FROM d) AS year,
-          FORMAT_DATE('%Y-%m-%d', d) AS iso_date,
-          EXTRACT(ISOWEEK FROM d) AS iso_week,
-          FORMAT_DATE('%Y-W%V', d) AS iso_year_week,
+          DATE_ADD(d, INTERVAL (7 - EXTRACT(DAYOFWEEK FROM d)) DAY) AS week_ending_dt,
+          LAST_DAY(d) AS month_ending_dt,
+          LAST_DAY(DATE_ADD(DATE_TRUNC(d, QUARTER), INTERVAL 2 MONTH)) AS quarter_ending_dt,
           CASE
-            WHEN EXTRACT(DAY FROM d) = 1 THEN 'Y'
-            ELSE 'N'
-          END AS first_day_of_month,
-          CASE
-            WHEN EXTRACT(DAY FROM d) = EXTRACT(DAY FROM LAST_DAY(d)) THEN 'Y'
-            ELSE 'N'
-          END AS last_day_of_month
-        FROM UNNEST(GENERATE_DATE_ARRAY('2014-01-01', '2050-01-01', INTERVAL 1 DAY)) AS d
+            WHEN EXTRACT(MONTH FROM d) <= 6 THEN DATE(EXTRACT(YEAR FROM d), 6, 30)
+            ELSE DATE(EXTRACT(YEAR FROM d), 12, 31)
+          END AS half_year_ending_dt,
+          DATE(EXTRACT(YEAR FROM d), 12, 31) AS year_ending_dt,
+          DATE_SUB(d, INTERVAL 1 YEAR) AS ly_date,
+          DATE_SUB(DATE_ADD(d, INTERVAL (7 - EXTRACT(DAYOFWEEK FROM d)) DAY), INTERVAL 1 YEAR) AS ly_week_ending_dt,
+          DATE_SUB(LAST_DAY(d), INTERVAL 1 YEAR) AS ly_month_ending_dt,
+          DATE_SUB(LAST_DAY(DATE_ADD(DATE_TRUNC(d, QUARTER), INTERVAL 2 MONTH)), INTERVAL 1 YEAR) AS ly_quarter_ending_dt,
+          DATE_SUB(
+            CASE
+              WHEN EXTRACT(MONTH FROM d) <= 6 THEN DATE(EXTRACT(YEAR FROM d), 6, 30)
+              ELSE DATE(EXTRACT(YEAR FROM d), 12, 31)
+            END, 
+            INTERVAL 1 YEAR
+          ) AS ly_half_year_ending_dt,
+          DATE(EXTRACT(YEAR FROM d) - 1, 12, 31) AS ly_year_ending_dt
+        FROM UNNEST(GENERATE_DATE_ARRAY('2020-01-01', '2025-12-31', INTERVAL 1 DAY)) AS d
         ORDER BY d ;;
     persist_for: "24 hours"
-  }
-
-  dimension: date_id {
-    primary_key: yes
-    type: string
-    sql: ${TABLE}.date_id ;;
   }
 
   dimension: date {
@@ -50,69 +39,24 @@ view: date_dimension {
     sql: ${TABLE}.date ;;
   }
 
-  dimension: last_year_date {
-    type: date
-    sql: ${TABLE}.last_year_date ;;
-  }
-
-  dimension: day_of_month {
-    type: number
-    sql: ${TABLE}.day_of_month ;;
-  }
-
-  dimension: day_name {
-    type: string
-    sql: ${TABLE}.day_name ;;
-  }
-
-  dimension: day_of_week {
-    type: number
-    sql: ${TABLE}.day_of_week ;;
-  }
-
-  dimension: weekend_flag {
-    type: string
-    sql: ${TABLE}.weekend_flag ;;
-  }
-
   dimension: week {
-    type: number
+    type: string
     sql: ${TABLE}.week ;;
   }
 
-  dimension: year_week {
-    type: string
-    sql: ${TABLE}.year_week ;;
-  }
-
   dimension: month {
-    type: number
+    type: string
     sql: ${TABLE}.month ;;
   }
 
-  dimension: month_name {
+  dimension: quarter {
     type: string
-    sql: ${TABLE}.month_name ;;
+    sql: ${TABLE}.quarter ;;
   }
 
-  dimension: year_month {
+  dimension: half_year {
     type: string
-    sql: ${TABLE}.year_month ;;
-  }
-
-  dimension: year_month_name {
-    type: string
-    sql: ${TABLE}.year_month_name ;;
-  }
-
-  dimension: qtr {
-    type: number
-    sql: ${TABLE}.qtr ;;
-  }
-
-  dimension: year_qtr {
-    type: string
-    sql: ${TABLE}.year_qtr ;;
+    sql: ${TABLE}.half_year ;;
   }
 
   dimension: year {
@@ -120,28 +64,58 @@ view: date_dimension {
     sql: ${TABLE}.year ;;
   }
 
-  dimension: iso_date {
+  dimension: week_ending_dt {
     type: date
-    sql: ${TABLE}.iso_date ;;
+    sql: ${TABLE}.week_ending_dt ;;
   }
 
-  dimension: iso_week {
-    type: number
-    sql: ${TABLE}.iso_week ;;
+  dimension: month_ending_dt {
+    type: date
+    sql: ${TABLE}.month_ending_dt ;;
   }
 
-  dimension: iso_year_week {
-    type: string
-    sql: ${TABLE}.iso_year_week ;;
+  dimension: quarter_ending_dt {
+    type: date
+    sql: ${TABLE}.quarter_ending_dt ;;
   }
 
-  dimension: first_day_of_month {
-    type: string
-    sql: ${TABLE}.first_day_of_month ;;
+  dimension: half_year_ending_dt {
+    type: date
+    sql: ${TABLE}.half_year_ending_dt ;;
   }
 
-  dimension: last_day_of_month {
-    type: string
-    sql: ${TABLE}.last_day_of_month ;;
+  dimension: year_ending_dt {
+    type: date
+    sql: ${TABLE}.year_ending_dt ;;
+  }
+
+  dimension: ly_date {
+    type: date
+    sql: ${TABLE}.ly_date ;;
+  }
+  
+  dimension: ly_week_ending_dt {
+    type: date
+    sql: ${TABLE}.ly_week_ending_dt ;;
+  }
+
+  dimension: ly_month_ending_dt {
+    type: date
+    sql: ${TABLE}.ly_month_ending_dt ;;
+  }
+
+  dimension: ly_quarter_ending_dt {
+    type: date
+    sql: ${TABLE}.ly_quarter_ending_dt ;;
+  }
+
+  dimension: ly_half_year_ending_dt {
+    type: date
+    sql: ${TABLE}.ly_half_year_ending_dt ;;
+  }
+
+  dimension: ly_year_ending_dt {
+    type: date
+    sql: ${TABLE}.ly_year_ending_dt ;;
   }
 }
